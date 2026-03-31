@@ -2,44 +2,73 @@
 <html>
 <head>
     <title>Deepfake Detector</title>
-    <link rel="stylesheet" href="../static/css/style.css">
+    <style>
+        body {
+            text-align: center;
+            font-family: Arial;
+            background: #0f2027;
+            color: white;
+        }
+
+        button {
+            padding: 10px 20px;
+            background: cyan;
+            border: none;
+            cursor: pointer;
+        }
+        
+        img {
+            margin-top: 15px;
+            border: 2px solid white;
+        }
+    </style>
 </head>
 <body>
-    <h2>Deepfake Detector</h2>
-    <form id="uploadForm">
-        <input type="file" name="image" id="imageInput" required>
-        <button type="submit">Detect</button>
-    </form>
-    <br>
-    <img id="resultImage" style="width:300px; display:none;">
-    <p id="status"></p>
-    <p id="probability"></p>
-    <p id="short_diff" style="font-weight:bold;"></p>
-    <p id="description"></p>
 
-    <script>
-        const form = document.getElementById('uploadForm');
-        form.addEventListener('submit', async (e)=>{
-            e.preventDefault();
-            const input = document.getElementById('imageInput');
-            const formData = new FormData();
-            formData.append('image', input.files[0]);
-            
-            const res = await fetch('/detect', {method:'POST', body: formData});
-            const data = await res.json();
-            
-            if(data.error){
-                alert(data.error);
-                return;
-            }
-            
-            document.getElementById('resultImage').src = data.filepath;
-            document.getElementById('resultImage').style.display = 'block';
-            document.getElementById('status').innerText = data.status;
-            document.getElementById('probability').innerText = `Real: ${data.real_score}%, Fake: ${data.fake_score}%`;
-            document.getElementById('short_diff').innerText = data.short_diff;
-            document.getElementById('description').innerText = data.description;
-        });
-    </script>
+<h2>Deepfake Detector</h2>
+
+<form id="form">
+    <input type="file" id="imageInput" required>
+    <button type="submit">Analyze</button>
+</form>
+
+<br>
+
+<img id="preview" style="width:300px; display:none;">
+<h3 id="status"></h3>
+<p id="prob"></p>
+<p id="short_diff"></p>
+<p id="desc"></p>
+
+<script>
+document.getElementById('form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    const file = document.getElementById('imageInput').files[0];
+    const formData = new FormData();
+    formData.append('image', file);
+
+    const res = await fetch('/detect', {
+        method: 'POST',
+        body: formData
+    });
+
+    const data = await res.json();
+
+    if(data.error){
+        alert(data.error);
+        return;
+    }
+
+    document.getElementById('preview').src = data.image;
+    document.getElementById('preview').style.display = "block";
+
+    document.getElementById('status').innerText = data.status;
+    document.getElementById('prob').innerText = `Real: ${data.real_score}% | Fake: ${data.fake_score}%`;
+    document.getElementById('short_diff').innerText = data.short_diff;
+    document.getElementById('desc').innerText = data.description;
+});
+</script>
+
 </body>
 </html>
