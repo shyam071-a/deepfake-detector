@@ -1,161 +1,45 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Deepfake Detector AI</title>
-
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-
-<style>
-body {
-    margin:0;
-    font-family:Arial;
-    background:linear-gradient(135deg,#0f2027,#203a43,#2c5364);
-    color:white;
-    display:flex;
-    justify-content:center;
-    align-items:center;
-    height:100vh;
-}
-
-.card {
-    width:95%;
-    max-width:450px;
-    padding:25px;
-    border-radius:20px;
-    background:rgba(255,255,255,0.1);
-    backdrop-filter:blur(10px);
-    text-align:center;
-}
-
-.upload-box {
-    border:2px dashed cyan;
-    padding:20px;
-    border-radius:15px;
-    margin-top:10px;
-    cursor:pointer;
-}
-
-button {
-    margin-top:15px;
-    padding:12px;
-    border:none;
-    border-radius:20px;
-    background:linear-gradient(45deg,#00ffcc,#00ccff);
-    cursor:pointer;
-}
-
-img, video {
-    width:100%;
-    margin-top:10px;
-    border-radius:10px;
-}
-
-#loader { display:none; margin-top:10px;}
-</style>
+    <title>Deepfake Detector</title>
+    <link rel="stylesheet" href="../static/css/style.css">
 </head>
-
 <body>
+    <h2>Deepfake Detector</h2>
+    <form id="uploadForm">
+        <input type="file" name="image" id="imageInput" required>
+        <button type="submit">Detect</button>
+    </form>
+    <br>
+    <img id="resultImage" style="width:300px; display:none;">
+    <p id="status"></p>
+    <p id="probability"></p>
+    <p id="short_diff" style="font-weight:bold;"></p>
+    <p id="description"></p>
 
-<div class="card">
-
-<h2>🧠 Deepfake Detector AI</h2>
-
-<div class="upload-box"
-     onclick="document.getElementById('file').click()"
-     ondrop="dropHandler(event)"
-     ondragover="event.preventDefault()">
-
-📂 Drag & Drop or Click
-<input type="file" id="file" hidden onchange="previewFile()">
-</div>
-
-<img id="imgPreview" style="display:none"/>
-<video id="videoPreview" controls style="display:none"></video>
-
-<button onclick="upload()">Analyze</button>
-
-<div id="loader">⏳ Processing...</div>
-
-<h3 id="result"></h3>
-
-<canvas id="chart"></canvas>
-
-</div>
-
-<script>
-let fileGlobal;
-
-function dropHandler(event){
-    event.preventDefault();
-    fileGlobal = event.dataTransfer.files[0];
-    preview(fileGlobal);
-}
-
-function previewFile(){
-    fileGlobal = document.getElementById("file").files[0];
-    preview(fileGlobal);
-}
-
-function preview(file){
-    let img = document.getElementById("imgPreview");
-    let video = document.getElementById("videoPreview");
-
-    let url = URL.createObjectURL(file);
-
-    if(file.type.startsWith("image")){
-        img.src = url;
-        img.style.display="block";
-        video.style.display="none";
-    } else {
-        video.src = url;
-        video.style.display="block";
-        img.style.display="none";
-    }
-}
-
-function upload(){
-    if(!fileGlobal){
-        alert("Upload file first");
-        return;
-    }
-
-    document.getElementById("loader").style.display="block";
-
-    let formData = new FormData();
-    formData.append("file", fileGlobal);
-
-    fetch("https://deepfake-detector-ai.onrender.com/detect", {
-        method:"POST",
-        body:formData
-    })
-    .then(res=>res.json())
-    .then(data=>{
-        document.getElementById("loader").style.display="none";
-
-        document.getElementById("result").innerText =
-            data.result + " ("+data.confidence+"%)";
-
-        drawChart(data.confidence);
-    })
-    .catch(()=>{
-        document.getElementById("loader").innerText="Server Error";
-    });
-}
-
-function drawChart(conf){
-    new Chart(document.getElementById("chart"),{
-        type:"doughnut",
-        data:{
-            labels:["Confidence","Remaining"],
-            datasets:[{
-                data:[conf,100-conf]
-            }]
-        }
-    });
-}
-</script>
-
+    <script>
+        const form = document.getElementById('uploadForm');
+        form.addEventListener('submit', async (e)=>{
+            e.preventDefault();
+            const input = document.getElementById('imageInput');
+            const formData = new FormData();
+            formData.append('image', input.files[0]);
+            
+            const res = await fetch('/detect', {method:'POST', body: formData});
+            const data = await res.json();
+            
+            if(data.error){
+                alert(data.error);
+                return;
+            }
+            
+            document.getElementById('resultImage').src = data.filepath;
+            document.getElementById('resultImage').style.display = 'block';
+            document.getElementById('status').innerText = data.status;
+            document.getElementById('probability').innerText = `Real: ${data.real_score}%, Fake: ${data.fake_score}%`;
+            document.getElementById('short_diff').innerText = data.short_diff;
+            document.getElementById('description').innerText = data.description;
+        });
+    </script>
 </body>
 </html>
