@@ -1,99 +1,69 @@
-from flask import Flask, request, jsonify, send_from_directory
-import os
+from flask import Flask, request, jsonify, render_template
 import cv2
 import numpy as np
-import uuid
-import librosa
+from tensorflow.keras.models import load_model
+from tensorflow.keras.preprocessing.image import img_to_array
+import dlib
+import os
 
 app = Flask(__name__)
+app.config['UPLOAD_FOLDER'] = 'static/uploads'
 
-UPLOAD_FOLDER = "uploads"
-if not os.path.exists(UPLOAD_FOLDER):
-    os.makedirs(UPLOAD_FOLDER)
+# Load pretrained XceptionNet model
+model = load_model("models/xception_deepfake.h5")
+detector = dlib.get_frontal_face_detector()
 
-# ---------- IMAGE ----------
-def detect_image(path):
-    img = cv2.imread(path)
-    if img is None:
-        return "Error", 0
+def preprocess_face(img):
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    faces = detector(gray)
+    if len(faces) == 0:
+        return None
+    x, y, w, h = faces[0].left(), faces[0].top(), faces[0].width(), faces[0].height()
+    face = img[y:y+h, x:x+w]
+    face = cv2.resize(face, (299, 299))
+    face = face.astype("float") / 255.0
+    face = img_to_array(face)
+    face = np.expand_dims(face, axis=0)
+    return face
 
-    val = np.mean(img)
+@app.route('/')
+def home():
+    return render_template('index.html')
 
-    if val > 120:
-        return "Real", 0.3
-    else:
-        return "Fake", 0.85
-
-# ---------- VIDEO ----------
-def detect_video(path):
-    cap = cv2.VideoCapture(path)
-    count = 0
-    fake = 0
-
-    while True:
-        ret, frame = cap.read()
-        if not ret or count > 15:
-            break
-
-        count += 1
-        if np.mean(frame) < 100:
-            fake += 1
-
-    cap.release()
-
-    prob = fake / max(count,1)
-
-    if prob > 0.5:
-        return "Fake", prob
-    else:
-        return "Real", prob
-
-# ---------- AUDIO ----------
-def detect_audio(path):
-    try:
-        y, sr = librosa.load(path)
-        energy = np.mean(np.abs(y))
-
-        if energy < 0.02:
-            return "Fake", 0.8
-        else:
-            return "Real", 0.2
-    except:
-        return "Error", 0
-
-# ---------- API ----------
-@app.route("/detect", methods=["POST"])
+@app.route('/detect', methods=['POST'])
 def detect():
-    file = request.files.get("file")
-
+    file = request.files['image']
     if not file:
-        return jsonify({"error": "No file"}), 400
-
-    filename = str(uuid.uuid4()) + file.filename
-    path = os.path.join(UPLOAD_FOLDER, filename)
-    file.save(path)
-
-    ext = filename.split(".")[-1].lower()
-
-    if ext in ["jpg","jpeg","png"]:
-        result, prob = detect_image(path)
-        type_ = "Image"
-
-    elif ext in ["mp4","avi","mov"]:
-        result, prob = detect_video(path)
-        type_ = "Video"
-
-    elif ext in ["wav","mp3"]:
-        result, prob = detect_audio(path)
-        type_ = "Audio"
-
+        return jsonify({"error":"No file uploaded"}),400
+    
+    filepath = os.path.join(app.config['UPLOAD_FOLDER'], file.filename)
+    file.save(filepath)
+    
+    img = cv2.imdecode(np.frombuffer(file.read(), np.uint8), cv2.IMREAD_COLOR)
+    face = preprocess_face(img)
+    if face is None:
+        return jsonify({"error": "No face detected"}), 400
+    
+    pred = model.predict(face)[0][0]
+    fake_score = float(pred)
+    real_score = 1 - fake_score
+    
+    if fake_score > 0.5:
+        status = "Fake Image"
+        description = "Artifacts, unnatural textures, or facial misalignment detected."
+        short_diff = "Fake: unnatural textures, artifacts"
     else:
-        return jsonify({"error":"Unsupported file"}), 400
-
+        status = "Real Image"
+        description = "Consistent facial features, natural textures, and lighting."
+        short_diff = "Real: natural textures, aligned face"
+    
     return jsonify({
-        "type": type_,
-        "result": result,
-        "confidence": round(prob*100,2)
+        "status": status,
+        "fake_score": round(fake_score*100,2),
+        "real_score": round(real_score*100,2),
+        "description": description,
+        "short_diff": short_diff,
+        "filepath": filepath
     })
 
 if __name__ == "__main__":
