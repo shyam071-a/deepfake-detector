@@ -1,45 +1,94 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Deepfake Detector</title>
-    <link rel="stylesheet" href="../static/css/style.css">
+    <title>AI Deepfake Detector</title>
+   
+    <style>
+        body {
+            margin: 0;
+            font-family: Arial;
+            background: linear-gradient(to right, #0f2027, #203a43, #2c5364);
+            color: white;
+            text-align: center;
+        }
+        
+        .container {
+            padding: 20px;
+        }
+        
+        form {
+            margin: 20px;
+        }
+        
+        button {
+            padding: 10px 20px;
+            background: cyan;
+            border: none;
+            cursor: pointer;
+        }
+        
+        img {
+            width: 300px;
+            margin-top: 20px;
+        }
+        
+        input, textarea {
+            width: 80%;
+            margin: 10px;
+            padding: 10px;
+            border-radius: 10px;
+            border: none;
+        }
+    </style>
 </head>
 <body>
-    <h2>Deepfake Detector</h2>
-    <form id="uploadForm">
-        <input type="file" name="image" id="imageInput" required>
-        <button type="submit">Detect</button>
-    </form>
-    <br>
-    <img id="resultImage" style="width:300px; display:none;">
-    <p id="status"></p>
-    <p id="probability"></p>
-    <p id="short_diff" style="font-weight:bold;"></p>
-    <p id="description"></p>
 
-    <script>
-        const form = document.getElementById('uploadForm');
-        form.addEventListener('submit', async (e)=>{
-            e.preventDefault();
-            const input = document.getElementById('imageInput');
-            const formData = new FormData();
-            formData.append('image', input.files[0]);
-            
-            const res = await fetch('/detect', {method:'POST', body: formData});
-            const data = await res.json();
-            
-            if(data.error){
-                alert(data.error);
-                return;
-            }
-            
-            document.getElementById('resultImage').src = data.filepath;
-            document.getElementById('resultImage').style.display = 'block';
-            document.getElementById('status').innerText = data.status;
-            document.getElementById('probability').innerText = `Real: ${data.real_score}%, Fake: ${data.fake_score}%`;
-            document.getElementById('short_diff').innerText = data.short_diff;
-            document.getElementById('description').innerText = data.description;
+<div class="container">
+    <h1>AI Deepfake Detector</h1>
+
+    <form id="form">
+        <input type="file" id="file" required>
+        <button>Analyze</button>
+    </form>
+
+    <div class="result">
+        <img id="preview">
+        <h2 id="status"></h2>
+        <p id="score"></p>
+
+        <!-- SHORT DIFFERENCE -->
+        <input type="text" id="short" placeholder="Short difference">
+
+        <!-- FULL DESCRIPTION -->
+        <textarea id="desc" placeholder="Explanation"></textarea>
+    </div>
+</div>
+
+<script>
+    const form = document.getElementById('form');
+
+    form.addEventListener('submit', async (e)=>{
+        e.preventDefault();
+    
+        const fileInput = document.getElementById('file');
+        const formData = new FormData();
+        formData.append('file', fileInput.files[0]);
+    
+        const res = await fetch('/detect', {
+            method: 'POST',
+            body: formData
         });
-    </script>
+    
+        const data = await res.json();
+    
+        document.getElementById('preview').src = data.file;
+        document.getElementById('status').innerText = data.status;
+        document.getElementById('score').innerText =
+            `Real: ${data.real}% | Fake: ${data.fake}%`;
+    
+        document.getElementById('short').value = data.short;
+        document.getElementById('desc').value = data.desc;
+    });
+</script>
 </body>
 </html>
