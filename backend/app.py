@@ -1,105 +1,100 @@
-from flask import Flask, request, jsonify, render_template
+from flask import Flask, request, jsonify, send_from_directory
+import os
 import cv2
 import numpy as np
-from tensorflow.keras.models import load_model
-from tensorflow.keras.preprocessing.image import img_to_array
-import dlib
-import os
 import uuid
+import librosa
 
 app = Flask(__name__)
-app.config['UPLOAD_FOLDER'] = 'static/uploads'
 
-# Load model
-model = load_model("models/xception_deepfake.h5")
+UPLOAD_FOLDER = "uploads"
+if not os.path.exists(UPLOAD_FOLDER):
+    os.makedirs(UPLOAD_FOLDER)
 
-# Face detector
-detector = dlib.get_frontal_face_detector()
+# ---------- IMAGE ----------
+def detect_image(path):
+    img = cv2.imread(path)
+    if img is None:
+        return "Error", 0
 
+    val = np.mean(img)
 
-def preprocess_face(img):
-    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    faces = detector(gray)
+    if val > 120:
+        return "Real", 0.3
+    else:
+        return "Fake", 0.85
 
-    if len(faces) == 0:
-        return None
+# ---------- VIDEO ----------
+def detect_video(path):
+    cap = cv2.VideoCapture(path)
+    count = 0
+    fake = 0
 
-    # Take first face
-    f = faces[0]
+    while True:
+        ret, frame = cap.read()
+        if not ret or count > 15:
+            break
 
-    x, y, w, h = f.left(), f.top(), f.width(), f.height()
+        count += 1
+        if np.mean(frame) < 100:
+            fake += 1
 
-    # Safe crop
-    h_img, w_img = img.shape[:2]
-    x = max(0, x)
-    y = max(0, y)
-    w = min(w, w_img - x)
-    h = min(h, h_img - y)
+    cap.release()
 
-    face = img[y:y+h, x:x+w]
+    prob = fake / max(count,1)
 
-    face = cv2.resize(face, (299, 299))
+    if prob > 0.5:
+        return "Fake", prob
+    else:
+        return "Real", prob
 
-    # Normalize (important)
-    face = face / 127.5 - 1.0
+# ---------- AUDIO ----------
+def detect_audio(path):
+    try:
+        y, sr = librosa.load(path)
+        energy = np.mean(np.abs(y))
 
-    face = img_to_array(face)
-    face = np.expand_dims(face, axis=0)
+        if energy < 0.02:
+            return "Fake", 0.8
+        else:
+            return "Real", 0.2
+    except:
+        return "Error", 0
 
-    return face
-
-
-@app.route('/')
-def home():
-    return render_template('index.html')
-
-
-@app.route('/detect', methods=['POST'])
+# ---------- API ----------
+@app.route("/detect", methods=["POST"])
 def detect():
-    file = request.files['image']
+    file = request.files.get("file")
 
     if not file:
-        return jsonify({"error": "No file uploaded"}), 400
+        return jsonify({"error": "No file"}), 400
 
-    # Unique filename
-    filename = str(uuid.uuid4()) + ".jpg"
-    filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+    filename = str(uuid.uuid4()) + file.filename
+    path = os.path.join(UPLOAD_FOLDER, filename)
+    file.save(path)
 
-    file.save(filepath)
+    ext = filename.split(".")[-1].lower()
 
-    # Read image
-    img = cv2.imread(filepath)
+    if ext in ["jpg","jpeg","png"]:
+        result, prob = detect_image(path)
+        type_ = "Image"
 
-    face = preprocess_face(img)
+    elif ext in ["mp4","avi","mov"]:
+        result, prob = detect_video(path)
+        type_ = "Video"
 
-    if face is None:
-        return jsonify({"error": "No face detected"}), 400
+    elif ext in ["wav","mp3"]:
+        result, prob = detect_audio(path)
+        type_ = "Audio"
 
-    # Prediction
-    pred = model.predict(face)[0][0]
-    print("Prediction:", pred)
-
-    fake_score = float(pred)
-    real_score = 1 - fake_score
-
-    if fake_score > 0.5:
-        status = "Fake Image"
-        short_diff = "Fake: artifacts, unnatural textures"
-        description = "Detected inconsistencies in face texture, lighting mismatch, or blending artifacts."
     else:
-        status = "Real Image"
-        short_diff = "Real: natural texture, proper lighting"
-        description = "Face shows natural texture, consistent lighting, and realistic alignment."
+        return jsonify({"error":"Unsupported file"}), 400
 
     return jsonify({
-        "status": status,
-        "fake_score": round(fake_score * 100, 2),
-        "real_score": round(real_score * 100, 2),
-        "short_diff": short_diff,
-        "description": description,
-        "image": filepath
+        "type": type_,
+        "result": result,
+        "confidence": round(prob*100,2)
     })
-
 
 if __name__ == "__main__":
     app.run(debug=True)
