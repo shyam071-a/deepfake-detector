@@ -16,17 +16,23 @@
 <script>
 function upload() {
     let file = document.getElementById("file").files[0];
+
+    if (!file) {
+        alert("Please select a file");
+        return;
+    }
+
     let formData = new FormData();
     formData.append("file", file);
 
-    fetch("https://your-app.onrender.com/detect", {
-        method: "POST",
-        body: formData
-    })
+    fetch("https://YOUR-REAL-URL.onrender.com/detect")
     .then(res => res.json())
     .then(data => {
         document.getElementById("result").innerText =
             data.result + " (" + data.confidence + "%)";
+    })
+    .catch(err => {
+        document.getElementById("result").innerText = "Error connecting API";
     });
 }
 </script>
