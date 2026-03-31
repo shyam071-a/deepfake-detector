@@ -1,73 +1,43 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Deepfake Detector</title>
-    <style>
-        body {
-            text-align: center;
-            font-family: Arial;
-            background: #0f2027;
-            color: white;
-        }
-
-        button {
-            padding: 10px 20px;
-            background: cyan;
-            border: none;
-            cursor: pointer;
-        }
-        
-        img {
-            margin-top: 15px;
-            border: 2px solid white;
-        }
-    </style>
+<title>Deepfake Detector</title>
+<style>
+body {font-family: Arial; background:#0f2027; color:white; text-align:center;}
+.box {background:#1e2a38; padding:20px; margin:20px auto; width:400px; border-radius:10px;}
+button {padding:10px; background:#4c6ef5; border:none; color:white; cursor:pointer;}
+</style>
 </head>
+
 <body>
 
-<h2>Deepfake Detector</h2>
+<h1>🛡 Deepfake Detection System</h1>
 
-<form id="form">
-    <input type="file" id="imageInput" required>
-    <button type="submit">Analyze</button>
-</form>
+<div class="box">
+    <input type="file" id="file"><br><br>
+    <button onclick="upload()">Analyze</button>
 
-<br>
-
-<img id="preview" style="width:300px; display:none;">
-<h3 id="status"></h3>
-<p id="prob"></p>
-<p id="short_diff"></p>
-<p id="desc"></p>
+    <h2 id="result"></h2>
+    <h3 id="confidence"></h3>
+</div>
 
 <script>
-document.getElementById('form').addEventListener('submit', async (e) => {
-    e.preventDefault();
+function upload(){
+    let file = document.getElementById("file").files[0];
 
-    const file = document.getElementById('imageInput').files[0];
-    const formData = new FormData();
-    formData.append('image', file);
+    let formData = new FormData();
+    formData.append("file", file);
 
-    const res = await fetch('/detect', {
-        method: 'POST',
+    fetch("http://127.0.0.1:5000/detect", {
+        method: "POST",
         body: formData
-    });
-
-    const data = await res.json();
-
-    if(data.error){
-        alert(data.error);
-        return;
-    }
-
-    document.getElementById('preview').src = data.image;
-    document.getElementById('preview').style.display = "block";
-
-    document.getElementById('status').innerText = data.status;
-    document.getElementById('prob').innerText = `Real: ${data.real_score}% | Fake: ${data.fake_score}%`;
-    document.getElementById('short_diff').innerText = data.short_diff;
-    document.getElementById('desc').innerText = data.description;
-});
+    })
+    .then(res => res.json())
+    .then(data => {
+        document.getElementById("result").innerText = data.result;
+        document.getElementById("confidence").innerText = "Confidence: " + data.confidence + "%";
+    })
+}
 </script>
 
 </body>
