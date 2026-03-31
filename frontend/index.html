@@ -1,44 +1,45 @@
 <!DOCTYPE html>
 <html>
 <head>
-<title>Deepfake Detector</title>
-<style>
-body {font-family: Arial; background:#0f2027; color:white; text-align:center;}
-.box {background:#1e2a38; padding:20px; margin:20px auto; width:400px; border-radius:10px;}
-button {padding:10px; background:#4c6ef5; border:none; color:white; cursor:pointer;}
-</style>
+    <title>Deepfake Detector</title>
+    <link rel="stylesheet" href="../static/css/style.css">
 </head>
-
 <body>
+    <h2>Deepfake Detector</h2>
+    <form id="uploadForm">
+        <input type="file" name="image" id="imageInput" required>
+        <button type="submit">Detect</button>
+    </form>
+    <br>
+    <img id="resultImage" style="width:300px; display:none;">
+    <p id="status"></p>
+    <p id="probability"></p>
+    <p id="short_diff" style="font-weight:bold;"></p>
+    <p id="description"></p>
 
-<h1>🛡 Deepfake Detection System</h1>
-
-<div class="box">
-    <input type="file" id="file"><br><br>
-    <button onclick="upload()">Analyze</button>
-
-    <h2 id="result"></h2>
-    <h3 id="confidence"></h3>
-</div>
-
-<script>
-function upload(){
-    let file = document.getElementById("file").files[0];
-
-    let formData = new FormData();
-    formData.append("file", file);
-
-    fetch("http://127.0.0.1:5000/detect", {
-        method: "POST",
-        body: formData
-    })
-    .then(res => res.json())
-    .then(data => {
-        document.getElementById("result").innerText = data.result;
-        document.getElementById("confidence").innerText = "Confidence: " + data.confidence + "%";
-    })
-}
-</script>
-
+    <script>
+        const form = document.getElementById('uploadForm');
+        form.addEventListener('submit', async (e)=>{
+            e.preventDefault();
+            const input = document.getElementById('imageInput');
+            const formData = new FormData();
+            formData.append('image', input.files[0]);
+            
+            const res = await fetch('/detect', {method:'POST', body: formData});
+            const data = await res.json();
+            
+            if(data.error){
+                alert(data.error);
+                return;
+            }
+            
+            document.getElementById('resultImage').src = data.filepath;
+            document.getElementById('resultImage').style.display = 'block';
+            document.getElementById('status').innerText = data.status;
+            document.getElementById('probability').innerText = `Real: ${data.real_score}%, Fake: ${data.fake_score}%`;
+            document.getElementById('short_diff').innerText = data.short_diff;
+            document.getElementById('description').innerText = data.description;
+        });
+    </script>
 </body>
 </html>
