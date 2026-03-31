@@ -1,36 +1,51 @@
 from flask import Flask, request, jsonify
-from flask_cors import CORS
+import cv2
+import numpy as np
+from tensorflow.keras.models import load_model
+from tensorflow.keras.preprocessing.image import img_to_array
 
 app = Flask(__name__)
-CORS(app)
 
-@app.route("/")
-def home():
-    return jsonify({"message": "API Working 🚀"})
+# Load pretrained XceptionNet Deepfake model
+model = load_model("xception_deepfake.h5")  # pretrained weights
 
-@app.route("/detect", methods=["POST"])
+def preprocess_face(img):
+    # Resize to 299x299 (XceptionNet input)
+    img = cv2.resize(img, (299, 299))
+    img = img.astype("float") / 255.0
+    img = img_to_array(img)
+    img = np.expand_dims(img, axis=0)
+    return img
+
+@app.route('/detect', methods=['POST'])
 def detect():
-    try:
-        print("API HIT 🔥")
+    file = request.files['image']
+    img = cv2.imdecode(np.frombuffer(file.read(), np.uint8), cv2.IMREAD_COLOR)
 
-        # check file
-        if "file" not in request.files:
-            return jsonify({"error": "No file uploaded"}), 400
+    # Preprocess image
+    processed = preprocess_face(img)
 
-        file = request.files["file"]
+    # Predict
+    pred = model.predict(processed)[0][0]  # 0 = real, 1 = fake
 
-        if file.filename == "":
-            return jsonify({"error": "Empty file"}), 400
+    # Convert to percentage
+    fake_score = float(pred)
+    real_score = 1 - fake_score
 
-        # TEMP response (AI later)
-        return jsonify({
-            "result": "FAKE",
-            "confidence": 92
-        })
+    # Description based on probability
+    if fake_score > 0.5:
+        status = "Fake Image"
+        description = "Face artifacts, unnatural textures, possible manipulation detected."
+    else:
+        status = "Real Image"
+        description = "Natural facial features, lighting, and textures consistent."
 
-    except Exception as e:
-        print("ERROR:", str(e))
-        return jsonify({"error": str(e)}), 500
+    return jsonify({
+        "status": status,
+        "fake_score": round(fake_score*100,2),
+        "real_score": round(real_score*100,2),
+        "description": description
+    })
 
 if __name__ == "__main__":
-    app.run()
+    app.run(debug=True)
