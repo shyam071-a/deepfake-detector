@@ -1,4 +1,4 @@
-from flask import Flask, jsonify
+from flask import Flask, request, jsonify
 
 app = Flask(__name__)
 
@@ -6,9 +6,6 @@ app = Flask(__name__)
 def home():
     return jsonify({"message": "API Working 🚀"})
 
-@app.route("/detect")
+@app.route("/detect", methods=["POST"])
 def detect():
     return jsonify({"result": "FAKE", "confidence": 95})
-
-if __name__ == "__main__":
-    app.run()
