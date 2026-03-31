@@ -1,30 +1,20 @@
-from flask import Flask, request, jsonify, render_template
-import cv2
+from flask import Flask, render_template, request, jsonify
 import numpy as np
-from tensorflow.keras.models import load_model
-from tensorflow.keras.preprocessing.image import img_to_array
-import dlib
+import cv2
 import os
+from tensorflow.keras.models import load_model
 
 app = Flask(__name__)
-app.config['UPLOAD_FOLDER'] = 'static/uploads'
+app.config['UPLOAD_FOLDER'] = 'static'
 
-# Load pretrained XceptionNet model
-model = load_model("models/xception_deepfake.h5")
-detector = dlib.get_frontal_face_detector()
+# Load real trained model (IMPORTANT)
+model = load_model("model/model.h5")
 
-def preprocess_face(img):
-    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    faces = detector(gray)
-    if len(faces) == 0:
-        return None
-    x, y, w, h = faces[0].left(), faces[0].top(), faces[0].width(), faces[0].height()
-    face = img[y:y+h, x:x+w]
-    face = cv2.resize(face, (299, 299))
-    face = face.astype("float") / 255.0
-    face = img_to_array(face)
-    face = np.expand_dims(face, axis=0)
-    return face
+def preprocess(img):
+    img = cv2.resize(img, (224,224))
+    img = img / 255.0
+    img = np.reshape(img, (1,224,224,3))
+    return img
 
 @app.route('/')
 def home():
@@ -32,38 +22,57 @@ def home():
 
 @app.route('/detect', methods=['POST'])
 def detect():
-    file = request.files['image']
-    if not file:
-        return jsonify({"error":"No file uploaded"}),400
-    
+    file = request.files['file']
     filepath = os.path.join(app.config['UPLOAD_FOLDER'], file.filename)
     file.save(filepath)
-    
-    img = cv2.imdecode(np.frombuffer(file.read(), np.uint8), cv2.IMREAD_COLOR)
-    face = preprocess_face(img)
-    if face is None:
-        return jsonify({"error": "No face detected"}), 400
-    
-    pred = model.predict(face)[0][0]
-    fake_score = float(pred)
-    real_score = 1 - fake_score
-    
-    if fake_score > 0.5:
-        status = "Fake Image"
-        description = "Artifacts, unnatural textures, or facial misalignment detected."
-        short_diff = "Fake: unnatural textures, artifacts"
+
+    ext = file.filename.split('.')[-1].lower()
+
+    # IMAGE DETECTION
+    if ext in ['jpg','jpeg','png']:
+        img = cv2.imread(filepath)
+        img = preprocess(img)
+
+        pred = model.predict(img)[0][0]
+
+        fake_score = float(pred)
+        real_score = 1 - fake_score
+
+        if fake_score > 0.5:
+            status = "FAKE"
+            short = "Unnatural texture & artifacts"
+            desc = "Image shows inconsistencies in lighting and facial texture."
+        else:
+            status = "REAL"
+            short = "Natural texture & lighting"
+            desc = "Image has consistent lighting and natural facial details."
+
+    # AUDIO (basic demo logic)
+    elif ext in ['mp3','wav']:
+        status = "CHECKED (Audio)"
+        fake_score = 50
+        real_score = 50
+        short = "Audio analysis basic"
+        desc = "Advanced model required for audio deepfake detection."
+
+    # VIDEO (basic demo logic)
+    elif ext in ['mp4','avi']:
+        status = "CHECKED (Video)"
+        fake_score = 50
+        real_score = 50
+        short = "Frame-based detection"
+        desc = "Video frames need deep analysis using CNN+LSTM."
+
     else:
-        status = "Real Image"
-        description = "Consistent facial features, natural textures, and lighting."
-        short_diff = "Real: natural textures, aligned face"
-    
+        return jsonify({"error":"Unsupported file type"})
+
     return jsonify({
         "status": status,
-        "fake_score": round(fake_score*100,2),
-        "real_score": round(real_score*100,2),
-        "description": description,
-        "short_diff": short_diff,
-        "filepath": filepath
+        "fake": round(fake_score*100,2),
+        "real": round(real_score*100,2),
+        "short": short,
+        "desc": desc,
+        "file": filepath
     })
 
 if __name__ == "__main__":
